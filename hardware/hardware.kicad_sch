@@ -8419,7 +8419,7 @@
 				)
 			)
 		)
-		(property "Footprint" "wii:nunchuck"
+		(property "Footprint" "nunchcuk:nunchuck"
 			(at 128.27 80.01 0)
 			(effects
 				(font
