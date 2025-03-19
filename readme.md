@@ -38,16 +38,6 @@ This project integrates an ESP32 microcontroller with LoRa communication and two
 - LoRa library (e.g., `RadioHead` or `LoRa.h`)
 - Nunchuck library (e.g., `Wire.h`, `ArduinoNunchuk.h`)
 
-## Installation
-1. Clone this repository:
-   ```sh
-   git clone https://github.com/your-repo-name.git
-   ```
-2. Install dependencies in Arduino IDE:
-   - Install ESP32 board support
-   - Install required libraries
-3. Open the `main.ino` file and upload it to your ESP32 board.
-
 ## Usage
 1. Connect the hardware components as per the wiring diagram.
 2. Power up the ESP32 via USB.
