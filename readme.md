@@ -1,5 +1,7 @@
 # ESP32 LoRa Nunchuck System
 
+![real](./real.jpg)
+
 ## Overview
 This project integrates an ESP32 microcontroller with LoRa communication and two Nunchuck connectors, enabling remote control and data transmission applications. The system is designed for long-range communication while leveraging the Wii Nunchuck controllers for user input.
 
@@ -81,14 +83,8 @@ void loop() {
 }
 ```
 
-## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ## Contributing
 Feel free to submit issues or pull requests for improvements and bug fixes.
-
-## Contact
-For inquiries, reach out via GitHub Issues or email `your-email@example.com`. 
 
 ---
 Happy coding! 🚀
