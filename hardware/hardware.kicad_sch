@@ -5780,6 +5780,28 @@
 			)
 		)
 	)
+	(global_label "LORA_RST"
+		(shape input)
+		(at 66.04 83.82 0)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "a164562b-1aae-4361-a442-f55f684a56b7")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 78.1571 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+	)
 	(global_label "TX-PROG"
 		(shape input)
 		(at 152.4 31.75 0)
