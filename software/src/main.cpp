@@ -9,6 +9,9 @@ SPIClass spi;
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH1106.h>
 
+#include <AsyncTCP.h>
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
 
 // OLED display size
 #define SCREEN_WIDTH 128
@@ -21,10 +24,37 @@ void onReceive(int);
 void drawRoll(int);
 void drawPitch(int);
 
+const int numDoubles = 5;
+const int doubleSize = sizeof(double);
+byte buffer[numDoubles * doubleSize];
+double receivedValues[numDoubles];
+
+double speed = 0;
+double lon = 0;
+double lat = 0;
+
+double data[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+
+static AsyncWebServer server(80);
+static AsyncWebSocket ws("/ws");
+
+void initWiFi() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin("ssid", "passsword");
+  Serial.print("Connecting to WiFi ..");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(1000);
+  }
+  Serial.println(WiFi.localIP());
+}
+
 void setup() {
 	Serial.begin(115200);
   Wire.begin(21,22);
-	nunchuck1.begin();	
+  initWiFi();
+  server.begin();
+  nunchuck1.begin();
   if (nunchuck1.type == Unknown) {
 		nunchuck1.type = NUNCHUCK;
 	}
@@ -40,8 +70,56 @@ void setup() {
   LoRa.setSignalBandwidth(250E3);
   LoRa.setTxPower(20);
   LoRa.setSyncWord(0xF3);
-  LoRa.onReceive(onReceive);
   LoRa.receive();
+
+  ws.onEvent([](AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+    (void)len;
+
+    if (type == WS_EVT_CONNECT) {
+      ws.textAll("new client connected");
+      Serial.println("ws connect");
+      client->setCloseClientOnQueueFull(false);
+      client->ping();
+
+    } else if (type == WS_EVT_DISCONNECT) {
+      ws.textAll("client disconnected");
+      Serial.println("ws disconnect");
+
+    } else if (type == WS_EVT_ERROR) {
+      Serial.println("ws error");
+
+    } else if (type == WS_EVT_PONG) {
+      Serial.println("ws pong");
+
+    } else if (type == WS_EVT_DATA) {
+      AwsFrameInfo *info = (AwsFrameInfo *)arg;
+      Serial.printf("index: %" PRIu64 ", len: %" PRIu64 ", final: %" PRIu8 ", opcode: %" PRIu8 "\n", info->index, info->len, info->final, info->opcode);
+      String msg = "";
+      if (info->final && info->index == 0 && info->len == len) {
+        if (info->opcode == WS_TEXT) {
+          data[len] = 0;
+          Serial.printf("ws text: %s\n", (char *)data);
+        }
+      }
+    }
+  });
+
+  // shows how to prevent a third WS client to connect
+  server.addHandler(&ws).addMiddleware([](AsyncWebServerRequest *request, ArMiddlewareNext next) {
+    // ws.count() is the current count of WS clients: this one is trying to upgrade its HTTP connection
+    if (ws.count() > 1) {
+      // if we have 2 clients or more, prevent the next one to connect
+      request->send(503, "text/plain", "Server is busy");
+    } else {
+      // process next middleware and at the end the handler
+      next();
+    }
+  });
+
+  server.addHandler(&ws);
+
+  server.begin();
+
   Serial.println("LoRa Initializing OK!");
 
   display.begin();
@@ -51,10 +129,18 @@ void setup() {
 }
 
 void drawRoll(int degree) {
-  display.drawLine(30, display.height() / 2 + degree, display.width() - 38, display.height() / 2 - degree,  WHITE);
+  display.drawLine(30, 20 + degree, display.width() - 38, 20 - degree,  WHITE);
+}
+
+void drawRollPlane(int degree) {
+  display.drawLine(0, 20 + degree, display.width() - 8, 20 - degree,  WHITE);
 }
 
 void drawPitch(int degree) {
+  display.drawLine(120, display.height() / 2 + degree, display.width() , display.height() / 2 + degree,  WHITE);
+}
+
+void drawPitchPlane(int degree) {
   display.drawLine(120, display.height() / 2 + degree, display.width() , display.height() / 2 + degree,  WHITE);
 }
 
@@ -65,13 +151,10 @@ void loop() {
   byte cmd = 0b00000000;
 
   int centerX = 60;
-  int centerY = 32;
+  int centerY = 20;
   int radius = 12;
 
-  // Draw full circle
   display.drawCircle(centerX, centerY, radius, WHITE);
-
-  // Cover bottom half to make it a top semi-circle
   display.fillRect(centerX - radius , centerY, radius * 3, radius + 2, BLACK);
 
   display.drawLine(120, 0, 120 , display.height(),  WHITE);
@@ -81,6 +164,8 @@ void loop() {
 
   drawRoll(roll);
   drawPitch(pitch);
+  drawRollPlane(int(trunc(receivedValues[4])));
+  drawPitchPlane(int(trunc(receivedValues[3])));
 
   display.setCursor(0, 0);
   if(nunchuck1.getButtonC()) {
@@ -97,6 +182,10 @@ void loop() {
   } else {
     display.print(" ");
   }
+
+
+  display.setCursor(40, 0);
+  display.println(WiFi.localIP());
   
   byte data[] = {
     cmd,
@@ -105,6 +194,20 @@ void loop() {
   };
 
   loraSend(data, sizeof(data));
+
+  onReceive(LoRa.parsePacket());
+
+  display.setCursor(0, 48);
+  display.print("RSSI ");
+  display.print(LoRa.packetRssi());
+  display.print("KMH ");
+  display.print(receivedValues[2], 2);
+
+  display.setCursor(0, 56);
+  display.print("LAT ");
+  display.print(receivedValues[0], 4);
+  display.print("LON ");
+  display.print(receivedValues[1], 4);
   display.display();
   delay(50);
 }
@@ -114,27 +217,30 @@ void decodeLora(byte* data, size_t length) {
 }
 
 void onReceive(int packetSize) {
-  if (packetSize == 0) return;          // if there's no packet, return
+  if (packetSize == 0) return;
 
-  int recipient = LoRa.read();
-  String incoming = "";
+  if (packetSize == numDoubles * doubleSize) {
+    for (int i = 0; i < packetSize; i++) {
+      buffer[i] = LoRa.read();
+    }
 
-  while (LoRa.available()) {
-    incoming += (char)LoRa.read();
+    // Unpack bytes back into doubles
+    for (int i = 0; i < numDoubles; i++) {
+        memcpy(&receivedValues[i], buffer + i * doubleSize, doubleSize);
+    }
+
+    // Print received doubles
+    Serial.println("Received values:");
+    for (int i = 0; i < numDoubles; i++) {
+      Serial.print("Double ");
+      Serial.print(i);
+      Serial.print(": ");
+      Serial.println(receivedValues[i], 6);
+    }
+    Serial.println("-----------");
   }
-
-  int length = incoming.length();
-  byte byteArray[length + 1];
-  incoming.getBytes(byteArray, length + 1);
-
-  decodeLora(byteArray, length + 1);
-
-  Serial.print(incoming);
   Serial.print(" || RSSI: ");
   Serial.println(LoRa.packetRssi());
-  display.setCursor(16, 0);
-  display.print("RSSI: ");
-  display.print(LoRa.packetRssi());
   Serial.println();
 }
 
